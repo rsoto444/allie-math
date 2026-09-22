@@ -44,6 +44,15 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error("daily-email failed:", err);
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ sent: false, error: message }, { status: 500 });
+    let databaseHost = "unset";
+    try {
+      databaseHost = new URL(process.env.DATABASE_URL ?? "").host;
+    } catch {
+      databaseHost = "unparseable";
+    }
+    return NextResponse.json(
+      { sent: false, error: message, debug: { databaseHost, hasAuthToken: !!process.env.DATABASE_AUTH_TOKEN } },
+      { status: 500 }
+    );
   }
 }
