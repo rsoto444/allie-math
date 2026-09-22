@@ -15,10 +15,11 @@ struggling with, and gives her regular quizzes (12 questions) and a weekly test
 - **Quiz / Test**: a fixed-length run across a mix of skills, scored at the end with
   a per-topic breakdown.
 - **Progress page**: accuracy per strand, recent quiz/test history.
-- **Daily email**: `/api/daily-summary` returns a JSON summary (questions answered,
-  accuracy, weak spots, streak) for the last 24 hours. It's protected by a secret
-  header (`x-report-secret`), not the PIN - it's meant to be called by an automated
-  job, not opened in a browser.
+- **Daily email**: a Vercel Cron Job hits `/api/cron/daily-email` once a day, which
+  builds a summary of the last 24 hours (questions answered, accuracy, weak spots,
+  streak, quiz/test scores) and emails it to the parent addresses via Gmail. There's
+  also a plain `/api/daily-summary` (protected by an `x-report-secret` header) that
+  returns the same data as JSON, for checking things manually without sending an email.
 
 ## Local setup
 
@@ -32,8 +33,16 @@ Copy `.env` and set your own values before real use:
 
 - `APP_PIN` - the PIN Allie types to open the app (placeholder: `1234`)
 - `APP_SESSION_SECRET` - random string that signs the login cookie
-- `REPORT_SECRET` - random string required to call `/api/daily-summary`
+- `REPORT_SECRET` - random string required to call `/api/daily-summary` (also
+  accepted by `/api/cron/daily-email` for manual testing)
 - `DATABASE_URL` - `file:./dev.db` locally; a Turso URL in production (see below)
+- `GMAIL_USER` - the Gmail address the daily email is sent from
+- `GMAIL_APP_PASSWORD` - a Gmail [App Password](https://myaccount.google.com/apppasswords)
+  for that address (not the regular login password)
+- `PARENT_EMAILS` - comma-separated recipient addresses, e.g.
+  `rsoto443@gmail.com,tmsoto04@gmail.com`
+- `CRON_SECRET` - random string; Vercel automatically sends it as a bearer token
+  when it calls `/api/cron/daily-email` on schedule
 
 ## Deploying
 
@@ -43,12 +52,10 @@ Copy `.env` and set your own values before real use:
 3. Prisma's migration tool can't talk to a Turso URL directly, so create the
    tables once by pasting `prisma/migrations/20260922031037_init/migration.sql`
    into Turso's web SQL shell for your database and running it.
-4. Import the repo into [Vercel](https://vercel.com/new), and set `DATABASE_URL`
-   (the Turso URL), `DATABASE_AUTH_TOKEN`, `APP_PIN`, `APP_SESSION_SECRET`, and
-   `REPORT_SECRET` as environment variables, then deploy.
-5. Once the app has a live URL, wire up the daily parent email (a scheduled job
-   that calls `GET /api/daily-summary` with the `x-report-secret` header and
-   emails the result to Rich and Toni).
+4. Import the repo into [Vercel](https://vercel.com/new), and set all the
+   environment variables listed above, then deploy. `vercel.json` already
+   configures the daily cron job - no extra setup needed once the env vars
+   are in place.
 
 ## Curriculum coverage (v1)
 
