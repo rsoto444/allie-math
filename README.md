@@ -40,11 +40,12 @@ Copy `.env` and set your own values before real use:
 1. Push this repo to GitHub (already done if you're reading this from GitHub).
 2. Create a free [Turso](https://turso.tech) database (SQLite-compatible, works
    great with serverless hosting) and copy its connection URL + auth token.
-3. Import the repo into [Vercel](https://vercel.com/new), and set `DATABASE_URL`
+3. Prisma's migration tool can't talk to a Turso URL directly, so create the
+   tables once by pasting `prisma/migrations/20260922031037_init/migration.sql`
+   into Turso's web SQL shell for your database and running it.
+4. Import the repo into [Vercel](https://vercel.com/new), and set `DATABASE_URL`
    (the Turso URL), `DATABASE_AUTH_TOKEN`, `APP_PIN`, `APP_SESSION_SECRET`, and
    `REPORT_SECRET` as environment variables, then deploy.
-4. The build runs `prisma migrate deploy` automatically (see `package.json`),
-   so the database tables are created on first deploy - no manual step needed.
 5. Once the app has a live URL, wire up the daily parent email (a scheduled job
    that calls `GET /api/daily-summary` with the `x-report-secret` header and
    emails the result to Rich and Toni).
