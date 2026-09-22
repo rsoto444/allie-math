@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Allie's Math Practice
 
-## Getting Started
+An adaptive 6th-grade math practice app, built for one student. It generates unlimited
+practice questions across five strands (ratios, fractions/decimals/integers, expressions
+& equations, geometry, and statistics), automatically leans on whichever topics she's
+struggling with, and gives her regular quizzes (12 questions) and a weekly test
+(20 questions).
 
-First, run the development server:
+## How it works
+
+- **Login**: a 4-digit PIN on the shared family device - no email account needed.
+- **Practice**: one question at a time. The app picks the next skill by weighting
+  toward topics with low accuracy or that haven't been tried yet, and ramps the
+  difficulty up after a hot streak or down after repeated misses.
+- **Quiz / Test**: a fixed-length run across a mix of skills, scored at the end with
+  a per-topic breakdown.
+- **Progress page**: accuracy per strand, recent quiz/test history.
+- **Daily email**: `/api/daily-summary` returns a JSON summary (questions answered,
+  accuracy, weak spots, streak) for the last 24 hours. It's protected by a secret
+  header (`x-report-secret`), not the PIN - it's meant to be called by an automated
+  job, not opened in a browser.
+
+## Local setup
 
 ```bash
+npm install
+npx prisma migrate dev   # creates the local SQLite database
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Copy `.env` and set your own values before real use:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `APP_PIN` - the PIN Allie types to open the app (placeholder: `1234`)
+- `APP_SESSION_SECRET` - random string that signs the login cookie
+- `REPORT_SECRET` - random string required to call `/api/daily-summary`
+- `DATABASE_URL` - `file:./dev.db` locally; a Turso URL in production (see below)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Deploying
 
-## Learn More
+1. Push this repo to GitHub (already done if you're reading this from GitHub).
+2. Create a free [Turso](https://turso.tech) database (SQLite-compatible, works
+   great with serverless hosting) and copy its connection URL + auth token.
+3. Import the repo into [Vercel](https://vercel.com/new), and set the environment
+   variables above (`DATABASE_URL` becomes your Turso URL; add `DATABASE_AUTH_TOKEN`
+   too and wire it into `src/lib/prisma.ts` if you go this route).
+4. Run `npx prisma migrate deploy` once against the production database.
+5. Once the app has a live URL, wire up the daily parent email (a scheduled job
+   that calls `GET /api/daily-summary` with the `x-report-secret` header and
+   emails the result to Rich and Toni).
 
-To learn more about Next.js, take a look at the following resources:
+## Curriculum coverage (v1)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Ratios & Rates
+- Fractions, Decimals & Integers (The Number System)
+- Expressions & Equations
+- Geometry
+- Statistics & Probability
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+More skills can be added by dropping a new generator function into
+`src/lib/generators/` and registering it in `src/lib/curriculum.ts`.
