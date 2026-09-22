@@ -18,9 +18,15 @@ function isAuthorized(request: NextRequest): boolean {
   }
 
   const reportSecret = process.env.REPORT_SECRET;
-  const provided = request.headers.get("x-report-secret");
-  if (reportSecret && provided && safeEqual(provided, reportSecret)) {
-    return true;
+  if (reportSecret) {
+    const headerValue = request.headers.get("x-report-secret");
+    if (headerValue && safeEqual(headerValue, reportSecret)) return true;
+
+    // Query-param fallback so this can be tested by pasting a URL into a
+    // browser - convenient for a personal family app, not meant as the
+    // primary auth path (the header and the cron bearer token are).
+    const queryValue = request.nextUrl.searchParams.get("secret");
+    if (queryValue && safeEqual(queryValue, reportSecret)) return true;
   }
 
   return false;
