@@ -37,8 +37,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const summary = await buildDailySummary(24);
-  await sendParentEmail(dailyEmailSubject(summary), dailyEmailHtml(summary));
-
-  return NextResponse.json({ sent: true, summary });
+  try {
+    const summary = await buildDailySummary(24);
+    await sendParentEmail(dailyEmailSubject(summary), dailyEmailHtml(summary));
+    return NextResponse.json({ sent: true, summary });
+  } catch (err) {
+    console.error("daily-email failed:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ sent: false, error: message }, { status: 500 });
+  }
 }
