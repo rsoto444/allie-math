@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { getSkillStats, weakestAreas, type WeakArea } from "@/lib/adaptive";
 import { getStreakDays } from "@/lib/streak";
-import { strandOf } from "@/lib/curriculum";
+import { getPathState } from "@/lib/path";
+import { skillMeta, gradeMeta, type Grade } from "@/lib/curriculum";
 
 export interface DailySummary {
   windowHours: number;
@@ -12,9 +12,19 @@ export interface DailySummary {
     accuracy: number | null;
     minutesPracticedEstimate: number;
   };
-  byStrand: { strand: string; correct: number; total: number; accuracy: number | null }[];
-  assessments: { mode: string; correct: number; total: number; finishedAt: Date | null }[];
-  weakestAreasAllTime: WeakArea[];
+  path: {
+    masteredTotal: number;
+    skillTotal: number;
+    currentSkill: string | null;
+    currentGrade: number | null;
+    nextAction: string;
+    practiceStreak: number;
+    grades: { grade: number; name: string; mastered: number; total: number; checkupDone: boolean }[];
+  };
+  newlyMastered: { name: string; via: string }[];
+  checkups: { grade: number; name: string; correct: number; total: number; gaps: string[]; solid: string[] }[];
+  masteryChecks: { skill: string; correct: number; total: number; passed: boolean }[];
+  reviews: { correct: number; total: number }[];
   streakDays: number;
   totalAttemptsAllTime: number;
 }
@@ -24,35 +34,44 @@ export async function buildDailySummary(hours = 24): Promise<DailySummary> {
 
   const attempts = await prisma.attempt.findMany({
     where: { createdAt: { gte: since } },
-    include: { skill: true },
     orderBy: { createdAt: "asc" },
   });
-
-  const sessions = await prisma.assessmentSession.findMany({
-    where: { startedAt: { gte: since }, finishedAt: { not: null } },
-    orderBy: { startedAt: "asc" },
-  });
-
   const totalAnswered = attempts.length;
   const totalCorrect = attempts.filter((a) => a.correct).length;
 
-  const byStrand = new Map<string, { correct: number; total: number }>();
-  for (const a of attempts) {
-    const strand = strandOf(a.skill.key);
-    const entry = byStrand.get(strand.name) ?? { correct: 0, total: 0 };
-    entry.total += 1;
-    if (a.correct) entry.correct += 1;
-    byStrand.set(strand.name, entry);
-  }
+  const sessions = await prisma.assessmentSession.findMany({
+    where: { finishedAt: { gte: since } },
+    orderBy: { finishedAt: "asc" },
+  });
 
-  const stats = await getSkillStats();
-  const weakest = weakestAreas(stats, 3);
+  const newlyMasteredRows = await prisma.skillMastery.findMany({
+    where: { masteredAt: { gte: since } },
+    include: { skill: true },
+    orderBy: { masteredAt: "asc" },
+  });
+
+  const path = await getPathState();
   const streakDays = await getStreakDays();
   const totalAttemptsAllTime = await prisma.attempt.count();
 
-  // Rough estimate, not a precise timer: about 45 seconds per question answered.
-  const minutesPracticedEstimate =
-    totalAnswered > 0 ? Math.max(1, Math.round(totalAnswered * 0.75)) : 0;
+  const checkups = sessions
+    .filter((s) => s.mode === "diagnostic")
+    .map((s) => {
+      const breakdown: Record<string, { correct: number; total: number }> = s.breakdown ? JSON.parse(s.breakdown) : {};
+      const solid: string[] = [];
+      const gaps: string[] = [];
+      for (const [key, v] of Object.entries(breakdown)) {
+        (v.correct === v.total ? solid : gaps).push(skillMeta(key).name);
+      }
+      return {
+        grade: s.grade ?? 0,
+        name: gradeMeta((s.grade ?? 6) as Grade).name,
+        correct: s.correctCount,
+        total: s.totalQuestions,
+        gaps,
+        solid,
+      };
+    });
 
   return {
     windowHours: hours,
@@ -61,21 +80,35 @@ export async function buildDailySummary(hours = 24): Promise<DailySummary> {
       questionsAnswered: totalAnswered,
       correctAnswered: totalCorrect,
       accuracy: totalAnswered > 0 ? totalCorrect / totalAnswered : null,
-      minutesPracticedEstimate,
+      // Rough estimate, not a precise timer: about 45 seconds per question.
+      minutesPracticedEstimate: totalAnswered > 0 ? Math.max(1, Math.round(totalAnswered * 0.75)) : 0,
     },
-    byStrand: Array.from(byStrand.entries()).map(([name, v]) => ({
-      strand: name,
-      correct: v.correct,
-      total: v.total,
-      accuracy: v.total > 0 ? v.correct / v.total : null,
-    })),
-    assessments: sessions.map((s) => ({
-      mode: s.mode,
-      correct: s.correctCount,
-      total: s.totalQuestions,
-      finishedAt: s.finishedAt,
-    })),
-    weakestAreasAllTime: weakest,
+    path: {
+      masteredTotal: path.masteredTotal,
+      skillTotal: path.skillTotal,
+      currentSkill: path.current?.name ?? null,
+      currentGrade: path.current?.grade ?? null,
+      nextAction: path.nextAction,
+      practiceStreak: path.practiceStreak,
+      grades: path.grades.map((g) => ({
+        grade: g.grade,
+        name: g.name,
+        mastered: g.masteredCount,
+        total: g.total,
+        checkupDone: g.diagnostic.status === "done",
+      })),
+    },
+    newlyMastered: newlyMasteredRows.map((m) => ({ name: m.skill.name, via: m.via })),
+    checkups,
+    masteryChecks: sessions
+      .filter((s) => s.mode === "mastery")
+      .map((s) => ({
+        skill: s.skillKey ? skillMeta(s.skillKey).name : "",
+        correct: s.correctCount,
+        total: s.totalQuestions,
+        passed: s.passed ?? false,
+      })),
+    reviews: sessions.filter((s) => s.mode === "review").map((s) => ({ correct: s.correctCount, total: s.totalQuestions })),
     streakDays,
     totalAttemptsAllTime,
   };

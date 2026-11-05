@@ -1,5 +1,5 @@
 // Prisma schema for Allie's Math Practice
-// SQLite locally; swap the datasource provider + DATABASE_URL to Postgres/Turso for production.
+// SQLite locally; Turso (libSQL) in production via the driver adapter.
 
 generator client {
   provider = "prisma-client"
@@ -11,12 +11,23 @@ datasource db {
 }
 
 model Skill {
-  id       String    @id @default(cuid())
-  strand   String // "RP" | "NS" | "EE" | "G" | "SP"
-  key      String    @unique
+  id       String        @id @default(cuid())
+  strand   String // topic label, e.g. "Fractions"
+  key      String        @unique
   name     String
   order    Int
+  grade    Int           @default(6)
   attempts Attempt[]
+  mastery  SkillMastery?
+}
+
+// One row per skill Allie has proven, either 3/3 on a grade check-up or 7/8 on a mastery check.
+model SkillMastery {
+  id         String   @id @default(cuid())
+  skillId    String   @unique
+  skill      Skill    @relation(fields: [skillId], references: [id])
+  via        String // "diagnostic" | "check"
+  masteredAt DateTime @default(now())
 }
 
 model Attempt {
@@ -24,7 +35,7 @@ model Attempt {
   skillId       String
   skill         Skill    @relation(fields: [skillId], references: [id])
   sessionId     String?
-  mode          String // "practice" | "quiz" | "test"
+  mode          String // "practice" | "diagnostic" | "mastery" | "review"
   difficulty    Int
   prompt        String
   userAnswer    String
@@ -39,7 +50,11 @@ model Attempt {
 
 model AssessmentSession {
   id             String    @id @default(cuid())
-  mode           String // "quiz" | "test"
+  mode           String // "diagnostic" | "mastery" | "review"
+  grade          Int? // diagnostic only
+  skillKey       String? // mastery only
+  plan           String? // JSON: [{ skillKey, difficulty, seed }] - the fixed question list
+  passed         Boolean? // mastery only
   totalQuestions Int
   correctCount   Int       @default(0)
   answeredCount  Int       @default(0)

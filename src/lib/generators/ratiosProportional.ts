@@ -13,20 +13,18 @@ const THINGS: [string, string][] = [
 
 export const rp_ratio_simplify: Generator = (difficulty, rng) => {
   const range = difficulty === 1 ? [2, 12] : difficulty === 2 ? [6, 30] : [12, 60];
-  let a = randInt(rng, range[0], range[1]);
-  let b = randInt(rng, range[0], range[1]);
-  // force a common factor so it actually simplifies
+  // Build from a reduced ratio so it always simplifies and the two sides differ.
   const k = randInt(rng, 2, 5);
-  a = a - (a % k) + k;
-  b = b - (b % k) + k;
+  const topMax = Math.max(3, Math.floor(range[1] / k));
+  const p = randInt(rng, 1, topMax);
+  let q = randInt(rng, 1, topMax);
+  while (q === p || gcd(p, q) !== 1) q = randInt(rng, 1, topMax);
+  const a = p * k;
+  const b = q * k;
   const [thingA, thingB] = pick(rng, THINGS);
   const d = gcd(a, b);
-  const answer = `${a / d}:${b / d}`;
-  const choices = makeChoices(rng, answer, [
-    `${a}:${b}`,
-    `${a / d}:${b}`,
-    `${b / d}:${a / d}`,
-  ]);
+  const answer = `${p}:${q}`;
+  const choices = makeChoices(rng, answer, [`${a}:${b}`, `${p}:${b}`, `${q}:${p}`, `${p + 1}:${q + 1}`]);
   return {
     prompt: `There are ${a} ${thingA} and ${b} ${thingB}. Write the ratio of ${thingA} to ${thingB} in simplest form.`,
     type: "mc",

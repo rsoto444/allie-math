@@ -69,10 +69,6 @@ export function makeChoices(
 ): string[] {
   const unique = Array.from(new Set(distractors.filter((d) => d !== correct)));
   const picked = shuffle(rng, unique).slice(0, 3);
-  while (picked.length < 3) {
-    // Fallback so we always have 4 options even if distractors collided.
-    picked.push(`${correct}?`.slice(0, -1) + " ");
-  }
   return shuffle(rng, [correct, ...picked]);
 }
 
@@ -109,12 +105,27 @@ function parseNumericToken(raw: string): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
-/** Compares a learner's typed answer against one or more acceptable forms. */
-export function answersMatch(userAnswer: string, acceptable: string[]): boolean {
-  const user = userAnswer.trim().toLowerCase().replace(/\s+/g, " ");
+function normalize(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/(\d),(?=\d{3}\b)/g, "$1") // thousands separators: 70,000 -> 70000
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * Compares a learner's typed answer against one or more acceptable forms.
+ * With `strict`, only the written form counts (used when the skill IS the
+ * form, e.g. converting to a mixed number); otherwise numerically equal
+ * answers like "1/2" and "0.5" also match.
+ */
+export function answersMatch(userAnswer: string, acceptable: string[], strict = false): boolean {
+  const user = normalize(userAnswer);
+  const userTight = user.replace(/\s+/g, "");
   for (const candidate of acceptable) {
-    const c = candidate.trim().toLowerCase().replace(/\s+/g, " ");
-    if (user === c) return true;
+    const c = normalize(candidate);
+    if (user === c || userTight === c.replace(/\s+/g, "")) return true;
+    if (strict) continue;
 
     const userNum = parseNumericToken(user);
     const candNum = parseNumericToken(c);
@@ -123,4 +134,17 @@ export function answersMatch(userAnswer: string, acceptable: string[]): boolean 
     }
   }
   return false;
+}
+
+export function formatMixed(num: number, den: number): string {
+  const [n, d] = simplifyFraction(num, den);
+  if (d === 1) return `${n}`;
+  if (Math.abs(n) < d) return `${n}/${d}`;
+  const whole = Math.trunc(n / d);
+  const rest = Math.abs(n % d);
+  return `${whole} ${rest}/${d}`;
+}
+
+export function formatRemainder(quotient: number, remainder: number): string {
+  return remainder === 0 ? `${quotient}` : `${quotient} R ${remainder}`;
 }

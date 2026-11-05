@@ -1,17 +1,13 @@
 import { getProgressAction } from "@/lib/actions";
 import { Nav } from "@/components/Nav";
-import { StrandBar } from "@/components/StrandBar";
+import { GradeCard } from "@/components/PathView";
 
 function formatDate(d: Date): string {
-  return new Date(d).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  return new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
 export default async function ProgressPage() {
-  const progress = await getProgressAction();
+  const { path, totalAttemptsAllTime, recentSessions } = await getProgressAction();
 
   return (
     <div className="flex flex-1 flex-col">
@@ -19,38 +15,29 @@ export default async function ProgressPage() {
       <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
         <h1 className="mb-1 font-display text-3xl font-bold">Your Progress</h1>
         <p className="mb-6 text-muted">
-          {progress.totalAttemptsAllTime} question{progress.totalAttemptsAllTime === 1 ? "" : "s"}{" "}
-          answered so far
+          {path.masteredTotal} of {path.skillTotal} skills mastered · {totalAttemptsAllTime} question
+          {totalAttemptsAllTime === 1 ? "" : "s"} answered so far
         </p>
 
-        <div className="mb-8 grid gap-3 sm:grid-cols-2">
-          {progress.strands.map((s) => (
-            <StrandBar
-              key={s.key}
-              name={s.name}
-              color={s.color}
-              accuracy={s.accuracy}
-              attempts={s.attempts}
-            />
+        <div className="mb-8 grid gap-3">
+          {path.grades.map((g) => (
+            <GradeCard key={g.grade} grade={g} expanded />
           ))}
         </div>
 
         <div className="rounded-2xl border border-card-border bg-card p-5">
-          <h2 className="mb-3 font-display text-lg font-bold">Recent quizzes & tests</h2>
-          {progress.recentAssessments.length === 0 ? (
-            <p className="text-sm text-muted">
-              No quizzes or tests taken yet - try one from the dashboard!
-            </p>
+          <h2 className="mb-3 font-display text-lg font-bold">Recent check-ups, mastery checks & reviews</h2>
+          {recentSessions.length === 0 ? (
+            <p className="text-sm text-muted">Nothing finished yet - start with the Grade 3 check-up!</p>
           ) : (
             <ul className="divide-y divide-card-border">
-              {progress.recentAssessments.map((a) => (
-                <li key={a.id} className="flex items-center justify-between py-2.5 text-sm">
-                  <span className="font-semibold capitalize">{a.mode}</span>
-                  <span className="text-muted">
-                    {a.finishedAt ? formatDate(a.finishedAt) : formatDate(a.startedAt)}
-                  </span>
+              {recentSessions.map((s) => (
+                <li key={s.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <span className="font-semibold">{s.label}</span>
+                  <span className="text-muted">{formatDate(s.finishedAt)}</span>
                   <span className="font-semibold">
-                    {a.correctCount}/{a.totalQuestions}
+                    {s.correctCount}/{s.totalQuestions}
+                    {s.passed === true ? " ✅" : s.passed === false ? " ✗" : ""}
                   </span>
                 </li>
               ))}
